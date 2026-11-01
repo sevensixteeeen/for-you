@@ -96,7 +96,7 @@
   }
   button.open:disabled { opacity: .6; cursor: wait; }
   .sad { margin-top: 16px; }
-  .sad canvas { width: 132px; height: auto; margin-bottom: 6px; }
+  .sad canvas { width: 160px; height: auto; margin-bottom: 6px; }
   .sad b { display: block; font-family: var(--hand); font-weight: 400; font-size: 1.6rem; }
   .sad small { color: #6d5a4f; }
   .timer { display: block; font: 800 2rem var(--ui); color: var(--heart); margin-top: 6px; font-variant-numeric: tabular-nums; }
@@ -329,7 +329,7 @@
       <button class="open" id="go" type="submit" disabled>open</button>
     </form>
     <div class="sad" id="sad" hidden>
-      <canvas id="cry" class="pixel" width="26" height="23" aria-hidden="true"></canvas>
+      <canvas id="cry" class="pixel" width="32" height="27" aria-hidden="true"></canvas>
       <b id="sad-title">wrong password…</b>
       <small id="sad-text">the kitty is crying 🥺 try again</small>
     </div>
@@ -405,7 +405,7 @@
 
 <script>
   // Encrypted with the password (AES-GCM, key from PBKDF2). Built by src/build.py.
-  const LOCK = {"salt": "CqelL5Fo2u74/im/IC6Wfw==", "iter": 250000, "check": "v9BsYuFqpiaRlQE1vxuNj04b", "checkIv": "MX+fDVqTmCgnhqBh", "iv": "V59sqdC+XrH7q1fY", "songIv": "pjljm+DL26hhFOrd", "introIv": "SxqebM5KbGWoOCWe"};
+  const LOCK = {"salt": "yiksCP4m4NEp4IvncbUySA==", "iter": 250000, "check": "ShtQVLfU2QWeCyB11y8kWooR", "checkIv": "+mF/1VGMAxRfvUVu", "iv": "TVCM1N1dYnxBYS8O", "songIv": "1p6L07uqiZbrwzkl", "introIv": "llxJOFLas8VZ0h9R"};
 
   const $ = (id) => document.getElementById(id);
   const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -473,8 +473,8 @@
     $("pw").disabled = $("go").disabled = true;
     $("sad").hidden = false;
     $("sad-title").textContent = "too many wrong tries…";
-    $("sad-text").innerHTML = 'the kitty needs a break 🥺 try again in<span class="timer" id="timer"></span>';
-    cry();
+    $("sad-text").innerHTML = 'the kitty fell asleep 😴 try again in<span class="timer" id="timer"></span>';
+    cry("sleep");
     const tick = () => {
       const left = lockedUntil() - Date.now();
       if (left <= 0) {
@@ -820,6 +820,27 @@
       ".................",
       ".................",
     ],
+    nap: [
+      ".....k......k.....",
+      "....kok....kok....",
+      "...kopokkkkopok...",
+      "...kooooooooook...",
+      "..kooooooooooook..",
+      "..kooooooooooook..",
+      "..kooeoeooeoeook..",
+      "..koboeonnoeobok..",
+      "..kooooeooeooook..",
+      "...kkoooeeoookk...",
+      "..kooooooooooookk.",
+      "..kooowwwwwwoookok",
+      "..kooowwwwwwoookok",
+      "..kooowwwwwwoookok",
+      "..kooowwwwwwooook.",
+      "..kooowwwwwwoook..",
+      "...kkookkkkookk...",
+      ".....kk....kk.....",
+      "..................",
+    ],
     heart: [
       ".rr.rr.",
       "rrrrrrr",
@@ -960,28 +981,44 @@
     requestAnimationFrame(frame);
   }
 
-  // crying cat on a wrong password
-  let crying = false;
-  function cry() {
-    if (crying) return;
-    crying = true;
+  // the lock-screen kitty: "cry" after a wrong password, "sleep" during the 5-minute wait
+  const Z = ["kkk", "..k", ".k.", "kkk"];
+  let catMode = "cry", catLoop = false;
+  function cry(mode = "cry") {
+    catMode = mode;
+    if (catLoop) return;
+    catLoop = true;
     const cv = $("cry"), ctx = cv.getContext("2d"), t0 = performance.now();
-    const cw = SPRITE.cry[0].length, x0 = Math.floor((cv.width - cw) / 2);
+    const cw = SPRITE.cry[0].length, x0 = Math.floor((cv.width - cw) / 2) - 2, y0 = cv.height - SPRITE.cry.length - 1;
     function frame(now) {
-      if ($("sad").hidden) { crying = false; return; }
+      if ($("sad").hidden) { catLoop = false; return; }
       const t = now - t0;
       ctx.clearRect(0, 0, cv.width, cv.height);
-      ctx.fillStyle = "#bfe0f2";
-      const puddle = Math.min(20, 6 + t / 250);
-      ctx.fillRect(Math.round(cv.width / 2 - puddle / 2), cv.height - 1, Math.round(puddle), 1);
-      const sob = Math.floor(t / 380) % 2;
-      draw(ctx, SPRITE.cry, x0, 1 + sob, GINGER);
-      ctx.fillStyle = BASE.t;
-      [0, 450].forEach((off) => {
-        const y = ((t + off) / 70) % 12;
-        ctx.fillRect(x0 + 6, 1 + sob + 7 + y, 1, 2);
-        ctx.fillRect(x0 + 11, 1 + sob + 7 + ((y + 6) % 12), 1, 2);
-      });
+      if (catMode === "sleep") {
+        // slow breathing + little z's drifting up
+        const breathe = Math.floor(t / 1300) % 2;
+        ctx.fillStyle = "rgba(75, 51, 41, .12)";
+        ctx.fillRect(x0 + 3, cv.height - 1, cw - 6, 1);
+        draw(ctx, SPRITE.nap, x0, y0 + breathe, GINGER);
+        [0, 1000, 2000].forEach((off) => {
+          const life = ((t + off) % 3000) / 3000;
+          ctx.globalAlpha = 1 - life;
+          draw(ctx, Z, x0 + cw - 2 + Math.round(life * 4), y0 + 4 - Math.round(life * 9), BASE);
+          ctx.globalAlpha = 1;
+        });
+      } else {
+        ctx.fillStyle = "#bfe0f2";
+        const puddle = Math.min(20, 6 + t / 250);
+        ctx.fillRect(Math.round(x0 + cw / 2 - puddle / 2), cv.height - 1, Math.round(puddle), 1);
+        const sob = Math.floor(t / 380) % 2;
+        draw(ctx, SPRITE.cry, x0, y0 + sob, GINGER);
+        ctx.fillStyle = BASE.t;
+        [0, 450].forEach((off) => {
+          const y = ((t + off) / 70) % 12;
+          ctx.fillRect(x0 + 6, y0 + sob + 7 + y, 1, 2);
+          ctx.fillRect(x0 + 11, y0 + sob + 7 + ((y + 6) % 12), 1, 2);
+        });
+      }
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
