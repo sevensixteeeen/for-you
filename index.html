@@ -306,6 +306,14 @@
   .letter p { font-family: var(--letter); font-size: 1.2rem; line-height: 36px; margin: 0; white-space: pre-wrap; }
   .letter .end { text-align: center; font-size: 2rem; margin-top: 20px; color: var(--heart); }
 
+  /* letter locked behind the code after the first read */
+  .letter-lock { text-align: center; padding: 26px 0 10px; }
+  .letter-lock-icon { font-size: 2.6rem; }
+  .letter-lock p { font-family: var(--letter); font-size: 1.25rem; line-height: 1.5; margin: 6px 0 16px; }
+  .letter-lock form { display: flex; gap: 8px; max-width: 260px; margin: 0 auto; }
+  .letter-lock input { letter-spacing: .4em; }
+  .letter-lock small { display: block; margin-top: 10px; color: var(--heart); font-weight: 700; }
+
   /* date question after the letter */
   .date-wrap { padding: 64px 16px 120px; background: var(--sage); }
   .date-card {
@@ -322,7 +330,7 @@
     border: 0; border-radius: 999px; padding: 14px 34px; cursor: pointer;
     box-shadow: 0 10px 22px -10px rgba(229, 57, 53, .8);
   }
-  .date-buttons .date-yes { position: absolute; left: 50%; top: 0; transform: translateX(-110%); }
+  .date-buttons .date-yes { position: absolute; left: 50%; top: 0; transform: translateX(-110%); z-index: 3; }
   .date-no {
     position: absolute; left: 50%; top: 6px; transform: translateX(15%);
     font: 700 1rem var(--ui); color: var(--brown); background: var(--paper);
@@ -439,7 +447,7 @@
 
 <script>
   // Encrypted with the password (AES-GCM, key from PBKDF2). Built by src/build.py.
-  const LOCK = {"salt": "Uz/P3TmxfQr939Q8yPixuA==", "iter": 250000, "check": "b855A/AHRgwhyDl3uK9eAOuI", "checkIv": "ez4DWo7zgrcMdXYx", "iv": "XT4plpvLsmsE8/nK", "songIv": "5blLkRe69dRqVub/", "introIv": "vr0qYGwaIjwW+gIK"};
+  const LOCK = {"salt": "p3llWveO05BVyHILM2ITKQ==", "iter": 250000, "check": "q+v3jsvBwenKy47eXrSZIv5y", "checkIv": "VNTb0BFmChdWvn6E", "iv": "w1M84eS8zsPlSH4r", "songIv": "kqP3rHojxs/rBg9R", "introIv": "gV2gnfFY++Y8+3tL"};
 
   const $ = (id) => document.getElementById(id);
   const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -1187,7 +1195,41 @@
     }, { threshold: 0, rootMargin: "0px 0px -10% 0px" });
     site.querySelectorAll(".reveal").forEach((el) => io.observe(el));
 
+    setUpLetterLock();
     setUpDate();
+  }
+
+  // ---- the letter: open the first time; once she has read it to the end, later visits need the code ----
+  function setUpLetterLock() {
+    const lock = $("letter-lock"), body = $("letter-body");
+    if (!lock || !body) return;
+    if (store.get("fy-letter-read")) {
+      body.hidden = true;
+      lock.hidden = false;
+    } else {
+      // mark it read when she reaches the end (it stays open for the rest of this visit)
+      const end = document.querySelector(".letter .end");
+      const io = new IntersectionObserver((entries) => {
+        if (entries.some((en) => en.isIntersecting) && !body.hidden) { store.set("fy-letter-read", 1); io.disconnect(); }
+      });
+      io.observe(end);
+    }
+    const sha256 = async (text) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))]
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
+    $("letter-code").addEventListener("input", () => { $("letter-wrong").hidden = true; });
+    $("letter-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = $("letter-code");
+      if ((await sha256(input.value.trim())) === lock.dataset.code) {
+        lock.hidden = true;
+        body.hidden = false;
+        body.closest(".letter").scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        $("letter-wrong").hidden = false;
+        input.classList.remove("shake"); void input.offsetWidth; input.classList.add("shake");
+        input.select();
+      }
+    });
   }
 
   // ---- "will you go on a date with me?" after the letter ----
@@ -1227,12 +1269,21 @@
       e.stopPropagation();
       dodges++;
       no.textContent = lines[dodges % lines.length];
-      // jump anywhere inside the card, away from where it was
+      // jump somewhere else inside the card, but never on top of "yes"
       const box = card.getBoundingClientRect(), from = area.getBoundingClientRect();
-      const maxX = box.width - no.offsetWidth - 12, maxY = box.height - no.offsetHeight - 12;
+      const yes = $("date-yes").getBoundingClientRect();
+      const w = no.offsetWidth, h = no.offsetHeight;
+      const maxX = box.width - w - 12, maxY = box.height - h - 12;
+      let x, y;
+      for (let tries = 0; tries < 30; tries++) {
+        x = 12 + Math.random() * maxX; y = 12 + Math.random() * maxY;
+        const l = box.left + x, t = box.top + y, gap = 12;
+        const hitsYes = l < yes.right + gap && l + w > yes.left - gap && t < yes.bottom + gap && t + h > yes.top - gap;
+        if (!hitsYes) break;
+      }
       no.style.transform = "none";
-      no.style.left = `${12 + Math.random() * maxX - (from.left - box.left)}px`;
-      no.style.top = `${12 + Math.random() * maxY - (from.top - box.top)}px`;
+      no.style.left = `${x - (from.left - box.left)}px`;
+      no.style.top = `${y - (from.top - box.top)}px`;
     }
     ["pointerdown", "pointerenter", "touchstart", "click", "focus"].forEach((ev) =>
       no.addEventListener(ev, runAway, { passive: false }));
