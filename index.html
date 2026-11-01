@@ -306,6 +306,40 @@
   .letter p { font-family: var(--letter); font-size: 1.2rem; line-height: 36px; margin: 0; white-space: pre-wrap; }
   .letter .end { text-align: center; font-size: 2rem; margin-top: 20px; color: var(--heart); }
 
+  /* date question after the letter */
+  .date-wrap { padding: 64px 16px 120px; background: var(--sage); }
+  .date-card {
+    position: relative; max-width: 520px; min-height: 360px; margin: 0 auto;
+    background: var(--paper); border-radius: 10px; padding: 26px 20px 30px; text-align: center;
+    box-shadow: 0 24px 48px -26px rgba(75, 51, 41, .6); overflow: hidden;
+  }
+  .date-card canvas { width: min(280px, 80%); height: auto; }
+  .date-card h2 { font-family: var(--hand); font-weight: 400; font-size: clamp(2rem, 8vw, 2.8rem); line-height: 1.05; margin: 6px 0 22px; }
+  .date-kicker { margin: 10px 0 0; color: #8a7669; font-weight: 600; }
+  .date-buttons { position: relative; height: 70px; }
+  .date-yes {
+    font: 800 1.2rem var(--ui); color: #fff; background: var(--heart);
+    border: 0; border-radius: 999px; padding: 14px 34px; cursor: pointer;
+    box-shadow: 0 10px 22px -10px rgba(229, 57, 53, .8);
+  }
+  .date-buttons .date-yes { position: absolute; left: 50%; top: 0; transform: translateX(-110%); }
+  .date-no {
+    position: absolute; left: 50%; top: 6px; transform: translateX(15%);
+    font: 700 1rem var(--ui); color: var(--brown); background: var(--paper);
+    border: 2px solid var(--sand); border-radius: 999px; padding: 10px 22px; cursor: pointer;
+    transition: left .25s ease, top .25s ease; white-space: nowrap; z-index: 2;
+  }
+  .ticket {
+    margin: 0 auto 22px; max-width: 320px; text-align: left;
+    background: #fff7ea; border: 2px dashed var(--orange); border-radius: 12px; padding: 14px 18px;
+  }
+  .ticket-head { font: 500 .95rem "Pixelify Sans", var(--ui); color: var(--orange); margin-bottom: 8px; }
+  .ticket dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; }
+  .ticket dt { font-weight: 800; color: #8a7669; text-transform: uppercase; font-size: .8rem; letter-spacing: .06em; align-self: center; }
+  .ticket dd { margin: 0; font-family: var(--letter); font-size: 1.25rem; }
+  .confetti { position: absolute; top: -20px; font-size: 1.4rem; pointer-events: none; animation: fall 2.6s ease-in forwards; }
+  @keyframes fall { to { transform: translateY(520px) rotate(200deg); opacity: 0; } }
+
   /* uses `translate` (not `transform`) so polaroids keep their tilt */
   .reveal { opacity: 0; translate: 0 24px; transition: opacity .8s ease, translate .8s ease; }
   .reveal.seen { opacity: 1; translate: none; }
@@ -405,7 +439,7 @@
 
 <script>
   // Encrypted with the password (AES-GCM, key from PBKDF2). Built by src/build.py.
-  const LOCK = {"salt": "yiksCP4m4NEp4IvncbUySA==", "iter": 250000, "check": "ShtQVLfU2QWeCyB11y8kWooR", "checkIv": "+mF/1VGMAxRfvUVu", "iv": "TVCM1N1dYnxBYS8O", "songIv": "1p6L07uqiZbrwzkl", "introIv": "llxJOFLas8VZ0h9R"};
+  const LOCK = {"salt": "Uz/P3TmxfQr939Q8yPixuA==", "iter": 250000, "check": "b855A/AHRgwhyDl3uK9eAOuI", "checkIv": "ez4DWo7zgrcMdXYx", "iv": "XT4plpvLsmsE8/nK", "songIv": "5blLkRe69dRqVub/", "introIv": "vr0qYGwaIjwW+gIK"};
 
   const $ = (id) => document.getElementById(id);
   const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -1153,14 +1187,82 @@
     }, { threshold: 0, rootMargin: "0px 0px -10% 0px" });
     site.querySelectorAll(".reveal").forEach((el) => io.observe(el));
 
-    // recording stops a few seconds after she reaches the end of the letter
-    const end = site.querySelector(".letter .end");
-    if (end) {
-      const endIo = new IntersectionObserver((entries) => {
-        if (entries.some((en) => en.isIntersecting)) { endIo.disconnect(); setTimeout(stopRecording, 4000); }
+    setUpDate();
+  }
+
+  // ---- "will you go on a date with me?" after the letter ----
+  function setUpDate() {
+    const cv = $("date-cats");
+    if (!cv) return;
+    const ctx = cv.getContext("2d"), W = cv.width, ground = cv.height - 2;
+    const catW = SPRITE.stand[0].length, hugShift = SPRITE.hug[0].length - catW;
+    let said = false, t0 = 0;
+
+    function scene(now) {
+      ctx.clearRect(0, 0, W, cv.height);
+      ctx.fillStyle = "#eaddc8"; ctx.fillRect(0, ground, W, 2);
+      if (!said) {
+        // the two kitties facing each other, waiting for her answer
+        stand(ctx, SPRITE.stand, 2, ground, GINGER);
+        stand(ctx, SPRITE.stand, W - 2 - catW, ground, GREY, true);
+        return;
+      }
+      const t = now - t0, hop = Math.floor(t / 450) % 2;
+      stand(ctx, SPRITE.hug, W / 2 - 26, ground - hop, GINGER);
+      stand(ctx, SPRITE.hug, W / 2 - hugShift, ground - (1 - hop), GREY, true);
+      [0, 450, 900].forEach((off, i) => {
+        const life = ((t + off) % 1400) / 1400;
+        draw(ctx, SPRITE.heart, W / 2 - 4 + [-11, 0, 10][i], ground - 20 - life * 10, BASE);
       });
-      endIo.observe(end);
+      requestAnimationFrame(scene);
     }
+    scene(0);
+
+    // "no" runs away whenever she tries to tap it
+    const no = $("date-no"), area = no.parentElement, card = no.closest(".date-card");
+    const lines = ["no", "nope 🙈", "are you sure?", "try again 😜", "too slow!", "just say yes 🥺", "nice try 😌"];
+    let dodges = 0;
+    function runAway(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dodges++;
+      no.textContent = lines[dodges % lines.length];
+      // jump anywhere inside the card, away from where it was
+      const box = card.getBoundingClientRect(), from = area.getBoundingClientRect();
+      const maxX = box.width - no.offsetWidth - 12, maxY = box.height - no.offsetHeight - 12;
+      no.style.transform = "none";
+      no.style.left = `${12 + Math.random() * maxX - (from.left - box.left)}px`;
+      no.style.top = `${12 + Math.random() * maxY - (from.top - box.top)}px`;
+    }
+    ["pointerdown", "pointerenter", "touchstart", "click", "focus"].forEach((ev) =>
+      no.addEventListener(ev, runAway, { passive: false }));
+
+    $("date-yes").onclick = () => {
+      said = true;
+      $("date-ask").hidden = true;
+      $("date-done").hidden = false;
+      t0 = performance.now();
+      requestAnimationFrame(scene);
+      for (let i = 0; i < 26; i++) {
+        const c = document.createElement("span");
+        c.className = "confetti";
+        c.textContent = ["💕", "❤️", "🌸", "✨"][i % 4];
+        c.style.left = `${Math.random() * 95}%`;
+        c.style.animationDelay = `${Math.random() * .8}s`;
+        card.appendChild(c);
+        setTimeout(() => c.remove(), 3600);
+      }
+      // if she let the camera watch, stop a few seconds after her "yes"
+      setTimeout(stopRecording, 5000);
+    };
+
+    $("date-tell").onclick = async () => {
+      const text = "I said YES to the date 💕 so… when? 🤫";
+      if (navigator.share) {
+        try { await navigator.share({ text }); return; } catch (err) { if (err.name === "AbortError") return; }
+      }
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    };
   }
 
   // page is fully loaded: the open button can work now (it starts disabled so an early tap can't reload the page)
