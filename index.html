@@ -41,6 +41,20 @@
   img { display: block; max-width: 100%; }
   [hidden] { display: none !important; }
 
+  /* privacy: no selecting/copying text, no long-press "save image", no dragging photos out */
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  input { -webkit-user-select: text; user-select: text; }
+  img, canvas { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
+  @media print { body { display: none !important; } }
+  .privacy {
+    position: fixed; inset: 0; z-index: 100;
+    display: grid; place-items: center; text-align: center; padding: 16px;
+    background: var(--cream); cursor: pointer;
+  }
+  .privacy-icon { font-size: 3.4rem; line-height: 1; }
+  .privacy p { font-family: var(--hand); font-size: 2.4rem; margin: 10px 0 6px; }
+  .privacy small { color: #8a7669; font-size: .95rem; }
+
   /* ---------- lock screen ---------- */
   .gate {
     position: fixed; inset: 0; z-index: 20;
@@ -445,9 +459,17 @@
 
 <main id="site" hidden></main>
 
+<div class="privacy" id="privacy" hidden>
+  <div>
+    <div class="privacy-icon">🙈</div>
+    <p>come back…</p>
+    <small>this is only for your eyes · tap to continue</small>
+  </div>
+</div>
+
 <script>
   // Encrypted with the password (AES-GCM, key from PBKDF2). Built by src/build.py.
-  const LOCK = {"salt": "p3llWveO05BVyHILM2ITKQ==", "iter": 250000, "check": "q+v3jsvBwenKy47eXrSZIv5y", "checkIv": "VNTb0BFmChdWvn6E", "iv": "w1M84eS8zsPlSH4r", "songIv": "kqP3rHojxs/rBg9R", "introIv": "gV2gnfFY++Y8+3tL"};
+  const LOCK = {"salt": "2+F0wnio1XG5mNP2xpkhqg==", "iter": 250000, "check": "byOZ+DeBMMfDr26jLH+++gyL", "checkIv": "8UxzEaLtx3FS/aRM", "iv": "zgv5j2sloNGh2aum", "songIv": "k0OWiP9Hs/VLNHNh", "introIv": "b7Eyo/4GWNhgyiXD"};
 
   const $ = (id) => document.getElementById(id);
   const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -1315,6 +1337,33 @@
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
     };
   }
+
+  // ---- privacy: makes copying harder. (No website can block a phone's own screenshot or screen recorder.) ----
+  const typing = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+  ["contextmenu", "dragstart", "copy", "cut", "selectstart"].forEach((ev) =>
+    document.addEventListener(ev, (e) => { if (!typing(e.target)) e.preventDefault(); }));
+  document.addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && ["s", "p", "u", "c", "a"].includes(k) && !typing(e.target)) e.preventDefault();
+  });
+
+  // once unlocked, cover everything while she's away (other app/tab, laptop snipping tool)
+  const unlocked = () => $("gate").classList.contains("gone"); // from the unlock animation onwards
+  const cover = () => { if (unlocked()) $("privacy").hidden = false; };
+  const uncover = () => { $("privacy").hidden = true; };
+  window.addEventListener("blur", cover);
+  document.addEventListener("visibilitychange", () => (document.hidden ? cover() : uncover()));
+  window.addEventListener("focus", uncover);
+  window.addEventListener("pageshow", uncover);
+  $("privacy").addEventListener("click", uncover); // never get stuck behind it
+
+  // Print Screen key (laptops): blank the page and replace the copied screenshot
+  document.addEventListener("keyup", (e) => {
+    if (e.key !== "PrintScreen" || !unlocked()) return;
+    $("privacy").hidden = false;
+    navigator.clipboard?.writeText("🙈 this is only for her eyes").catch(() => {});
+    setTimeout(uncover, 1500);
+  });
 
   // page is fully loaded: the open button can work now (it starts disabled so an early tap can't reload the page)
   $("go").disabled = false;
